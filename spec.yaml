@@ -8,3 +8,8 @@ domains:
     description: "Data exchange & status"
   - name: billing
     description: "Micropayments & revenue reporting"
+# bootstrap peers for discovery
+bootstrap:
+  peers:
+    - "http://localhost:8080/ping"
+    - "http://localhost:8081/ping"

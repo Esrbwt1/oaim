@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -22,12 +24,15 @@ func main() {
 	switch cmd {
 	case "init":
 		cmdInit()
+	case "discover":
+		cmdDiscover()
 	case "run-agent":
 		cmdRunAgent()
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 		os.Exit(1)
 	}
+
 }
 
 func cmdInit() {
@@ -81,5 +86,30 @@ func cmdRunAgent() {
 	err := http.ListenAndServe(addr, nil)
 	if err != nil {
 		log.Fatalf("Server error: %v", err)
+	}
+}
+
+func cmdDiscover() {
+	// Read spec.yaml
+	data, err := os.ReadFile("spec.yaml")
+	if err != nil {
+		log.Fatalf("Error reading spec.yaml: %v", err)
+	}
+
+	// Parse YAML (using minimal external dependency)
+	type Spec struct {
+		Bootstrap struct {
+			Peers []string `yaml:"peers"`
+		} `yaml:"bootstrap"`
+	}
+	var spec Spec
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		log.Fatalf("Error parsing spec.yaml: %v", err)
+	}
+
+	// Print peer list
+	fmt.Println("Discovered bootstrap peers:")
+	for _, peer := range spec.Bootstrap.Peers {
+		fmt.Printf("  • %s\n", peer)
 	}
 }
