@@ -1,27 +1,33 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 )
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: oaim <command>")
+		fmt.Println("Usage: oaim <command> [flags]")
 		os.Exit(1)
 	}
 
-	switch os.Args[1] {
+	cmd := os.Args[1]
+	// shift args so flag package sees only command-specific flags
+	os.Args = append(os.Args[:1], os.Args[2:]...)
+	switch cmd {
 	case "init":
 		cmdInit()
 	case "run-agent":
 		cmdRunAgent()
 	default:
-		fmt.Printf("Unknown command: %s\n", os.Args[1])
+		fmt.Printf("Unknown command: %s\n", cmd)
 		os.Exit(1)
 	}
-
 }
 
 func cmdInit() {
@@ -49,13 +55,31 @@ domains:
 }
 
 func cmdRunAgent() {
-	// For now, just a stub. Later, we'll wire up real agent logic.
-	fmt.Println("🟢 OAIM Agent is running with spec.yaml:")
+	// Define flags
+	port := flag.Int("port", 8080, "Port to serve on")
+	peer := flag.String("ping", "", "URL of peer to ping (e.g. http://localhost:8081/ping)")
+	flag.Parse()
 
-	data, err := os.ReadFile("spec.yaml")
-	if err != nil {
-		fmt.Println("Error reading spec.yaml:", err)
-		os.Exit(1)
+	if *peer != "" {
+		// Act as client: send ping
+		resp, err := http.Get(*peer)
+		if err != nil {
+			log.Fatalf("Ping failed: %v", err)
+		}
+		body, _ := ioutil.ReadAll(resp.Body)
+		fmt.Printf("Received response from peer: %s\n", string(body))
+		return
 	}
-	fmt.Println(string(data))
+
+	// Act as server: serve ping endpoint
+	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "pong")
+	})
+
+	addr := fmt.Sprintf(":%d", *port)
+	fmt.Printf("🟢 OAIM Agent listening on %s\n", addr)
+	err := http.ListenAndServe(addr, nil)
+	if err != nil {
+		log.Fatalf("Server error: %v", err)
+	}
 }
