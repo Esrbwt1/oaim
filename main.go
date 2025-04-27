@@ -60,14 +60,14 @@ domains:
 }
 
 func cmdRunAgent() {
-	// Define flags
+	// Flags
 	port := flag.Int("port", 8080, "Port to serve on")
-	peer := flag.String("ping", "", "URL of peer to ping (e.g. http://localhost:8081/ping)")
+	pingURL := flag.String("ping", "", "URL of peer to ping (overrides auto-discovery)")
 	flag.Parse()
 
-	if *peer != "" {
-		// Act as client: send ping
-		resp, err := http.Get(*peer)
+	// If explicit ping flag is given, act as client only
+	if *pingURL != "" {
+		resp, err := http.Get(*pingURL)
 		if err != nil {
 			log.Fatalf("Ping failed: %v", err)
 		}
@@ -76,15 +76,32 @@ func cmdRunAgent() {
 		return
 	}
 
-	// Act as server: serve ping endpoint
+	// Otherwise, start as server
+	// First, auto-discover bootstrap peers and ping them
+	peers, err := loadBootstrapPeers()
+	if err != nil {
+		log.Printf("Warning: could not load bootstrap peers: %v\n", err)
+	} else {
+		fmt.Println("🔍 Auto-discovering peers...")
+		for _, peer := range peers {
+			fmt.Printf("Pinging %s … ", peer)
+			resp, err := http.Get(peer)
+			if err != nil {
+				fmt.Println("failed:", err)
+			} else {
+				body, _ := ioutil.ReadAll(resp.Body)
+				fmt.Println(string(body))
+			}
+		}
+	}
+
+	// Now start HTTP server for other agents to ping
 	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "pong")
 	})
-
 	addr := fmt.Sprintf(":%d", *port)
 	fmt.Printf("🟢 OAIM Agent listening on %s\n", addr)
-	err := http.ListenAndServe(addr, nil)
-	if err != nil {
+	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }
@@ -112,4 +129,22 @@ func cmdDiscover() {
 	for _, peer := range spec.Bootstrap.Peers {
 		fmt.Printf("  • %s\n", peer)
 	}
+}
+
+// loadBootstrapPeers reads spec.yaml and returns the list of bootstrap peer URLs.
+func loadBootstrapPeers() ([]string, error) {
+	data, err := os.ReadFile("spec.yaml")
+	if err != nil {
+		return nil, err
+	}
+	type Spec struct {
+		Bootstrap struct {
+			Peers []string `yaml:"peers"`
+		} `yaml:"bootstrap"`
+	}
+	var spec Spec
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return nil, err
+	}
+	return spec.Bootstrap.Peers, nil
 }
