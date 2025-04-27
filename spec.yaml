@@ -1,0 +1,10 @@
+version: "0.1"
+domains:
+  - name: discovery
+    description: "How agents find each other"
+  - name: negotiation
+    description: "Task proposals & acceptances"
+  - name: execution
+    description: "Data exchange & status"
+  - name: billing
+    description: "Micropayments & revenue reporting"
